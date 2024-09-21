@@ -1,0 +1,708 @@
+
+<html>
+<head>
+    <meta charset="UTF-8"></meta>
+    <title>Engineering Resource Forecasting Tool - built using ChatGPT o1-preview <a href="https://docs.google.com/document/d/1tz8yKQxorDLk1A84r01beFRKkUYTINdU5KVg6SYpYw0/edit?usp=sharing">sourcecode</a></title>
+    <style>
+        /* Styling for the tool */
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .input-section, .output-section { margin-bottom: 30px; }
+        label { display: block; margin-top: 10px; }
+        .input-group { margin-bottom: 10px; }
+        input { width: 80%; padding: 8px; margin-top: 5px; }
+        button { padding: 10px 20px; margin-top: 20px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ccc; padding: 8px; text-align: center; }
+        td.editable { background-color: #f9f9f9; cursor: pointer; }
+        canvas { max-width: 100%; height: auto; }
+        .info { margin-top: 10px; font-weight: bold; }
+        .help-text { font-size: 0.9em; color: #555; }
+        .summary { margin-top: 20px; font-size: 1em; }
+        .faq-section { margin-top: 40px; }
+        .faq-item { margin-bottom: 20px; }
+        .faq-item h4 { margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<h2>Engineering Resource Forecasting Tool - built using ChatGPT o1-preview <a href="https://docs.google.com/document/d/1tz8yKQxorDLk1A84r01beFRKkUYTINdU5KVg6SYpYw0/edit?usp=sharing">sourcecode</a></h2>
+
+<div class="input-section">
+    <h3>Input Parameters</h3>
+    <div class="input-group">
+        <label for="fundedSize">Funded Team Size:</label>
+        <input id="fundedSize" type="number" value="13" />
+        <div class="help-text">Total number of engineers the budget allows for.</div>
+    </div>
+
+    <div class="input-group">
+        <label for="currentEngineers">Current Available Engineers:</label>
+        <input id="currentEngineers" type="number" value="5" />
+        <div class="help-text">Number of engineers currently available and working.</div>
+    </div>
+
+    <div class="input-group">
+        <label for="hiringTime">Average Hiring Time (weeks):</label>
+        <input id="hiringTime" type="number" value="12" />
+        <div class="help-text">Time from initiating hiring to an engineer's start date. Consider reducing this to hire engineers faster.</div>
+    </div>
+
+    <div class="input-group">
+        <label for="rampUpTime">Ramp-up Time (weeks):</label>
+        <input id="rampUpTime" type="number" value="10" />
+        <div class="help-text">Time for new hires to reach full productivity.</div>
+    </div>
+
+    <div class="input-group">
+        <label for="attritionRate">Annual Attrition Rate (%):</label>
+        <input id="attritionRate" type="number" value="25" />
+        <div class="help-text">Percentage of engineers expected to leave annually. Lowering this can help retain more engineers.</div>
+    </div>
+
+    <div class="input-group">
+        <label for="efficiencyFactor">Efficiency Factor (% productive time):</label>
+        <input id="efficiencyFactor" type="number" value="70" />
+        <div class="help-text">Average productive time per engineer. Improving this increases effective capacity.</div>
+    </div>
+
+    <div class="input-group">
+        <label for="leaveDays">Annual Leave Days per Engineer:</label>
+        <input id="leaveDays" type="number" value="20" />
+        <div class="help-text">Total leave days per engineer per year.</div>
+    </div>
+
+    <div class="input-group">
+        <label for="publicHolidays">Public Holidays per Year:</label>
+        <input id="publicHolidays" type="number" value="10" />
+        <div class="help-text">Total public holidays per year.</div>
+    </div>
+
+    <div class="input-group">
+        <label for="closeGapWeek">Week to Close Funding Gap:</label>
+        <input id="closeGapWeek" type="number" value="12" />
+        <div class="help-text">Target week to reach the funded team size. Adjust this to a later week if the target is unattainable.</div>
+    </div>
+
+    <button onclick="generateForecast()">Generate Forecast</button>
+</div>
+
+<div class="output-section">
+    <h3>Monthly Resource Summary</h3>
+    <div class="info" id="hiringInfo"></div>
+    <canvas id="forecastChart"></canvas>
+    <table id="monthlySummaryTable"></table>
+    <div class="summary" id="outputSummary"></div>
+    <h3>Weekly Resource Plan</h3>
+    <table id="forecastTable"></table>
+</div>
+
+<!-- FAQ Section -->
+<div class="faq-section">
+    <h3>Frequently Asked Questions (FAQ)</h3>
+
+    <!-- Added Detailed Explanation as an FAQ Item -->
+    <div class="faq-item">
+        <h4>1. How are SDE-Weeks and SDE-Days calculated?</h4>
+        <p><strong>SDE-Weeks</strong> and <strong>SDE-Days</strong> represent the effective engineering capacity after accounting for factors like efficiency, leave days, and public holidays. Here's a detailed explanation:</p>
+
+        <p><strong>Definitions:</strong></p>
+        <ul>
+            <li><strong>SDE-Weeks:</strong> Sum of the effective engineer contributions per week within a month.</li>
+            <li><strong>SDE-Days:</strong> Sum of the effective engineer contributions per day within a month.</li>
+        </ul>
+
+        <p>These metrics account for factors such as leave days, public holidays, and the efficiency factor, which impact the actual productive time of engineers.</p>
+
+        <p><strong>Calculation Steps:</strong></p>
+        <ol>
+            <li><strong>Calculate Weekly Leave and Holiday Days per Engineer:</strong>
+                <ul>
+                    <li>Weekly Leave Days = Annual Leave Days / 52</li>
+                    <li>Weekly Public Holidays = Annual Public Holidays / 52</li>
+                </ul>
+            </li>
+            <li><strong>Calculate Weekly Available Working Days per Engineer:</strong>
+                <ul>
+                    <li>Weekly Available Days = 5 - (Weekly Leave Days + Weekly Public Holidays)</li>
+                </ul>
+            </li>
+            <li><strong>Calculate Effective Engineers per Week:</strong>
+                <ul>
+                    <li>Effective Engineers = Total Ramped Up Engineers × Efficiency Factor × (Weekly Available Days / 5)</li>
+                </ul>
+            </li>
+            <li><strong>Calculate SDE-Weeks for a Month:</strong>
+                <ul>
+                    <li>SDE-Weeks = Sum of Effective Engineers over the weeks in the month</li>
+                </ul>
+            </li>
+            <li><strong>Calculate SDE-Days for a Month:</strong>
+                <ul>
+                    <li>SDE-Days = Sum of (Effective Engineers × Weekly Available Days) over the weeks in the month</li>
+                </ul>
+            </li>
+        </ol>
+
+        <p><strong>Example:</strong> If you have 1 engineer with an efficiency factor of 100%, annual leave days of 20, and public holidays of 10:</p>
+        <ul>
+            <li>Weekly Leave Days ≈ 0.3846 days/week</li>
+            <li>Weekly Public Holidays ≈ 0.1923 days/week</li>
+            <li>Weekly Available Days ≈ 4.4231 days/week</li>
+            <li>Effective Engineers ≈ 0.8846 per week</li>
+            <li>SDE-Weeks for a 4-week month ≈ 3.5384</li>
+            <li>SDE-Days for a 4-week month ≈ 15.664</li>
+        </ul>
+
+        <p>This explains why the SDE-Weeks may not be exactly equal to the headcount or the number of weeks, as it accounts for reduced availability due to leave, holidays, and efficiency.</p>
+    </div>
+  
+    <div class="faq-item">
+        <h4>2. How are SDE-Weeks and SDE-Days calculated?</h4>
+        <p>SDE-Weeks and SDE-Days represent the effective engineering capacity after accounting for factors like efficiency, leave days, and public holidays. They are calculated by multiplying the number of effective engineers by the number of available working days per week or per month.</p>
+    </div>
+
+    <div class="faq-item">
+        <h4>3. Why doesn't the number of SDE-Weeks match the headcount?</h4>
+        <p>The SDE-Weeks may not match the headcount because they account for the efficiency factor, leave days, public holidays, and attrition. These factors reduce the actual productive time of engineers, resulting in SDE-Weeks being less than the total headcount.</p>
+    </div>
+
+    <div class="faq-item">
+        <h4>4. How does the efficiency factor impact the calculations?</h4>
+        <p>The efficiency factor represents the percentage of productive time an engineer is expected to contribute. It accounts for non-productive activities like meetings, training, or other duties. A lower efficiency factor reduces the effective engineering capacity.</p>
+    </div>
+
+    <div class="faq-item">
+        <h4>5. How are leave days and public holidays accounted for?</h4>
+        <p>Leave days and public holidays are distributed evenly throughout the year to calculate the average weekly available working days per engineer. They reduce the number of days an engineer is available to work each week.</p>
+    </div>
+
+    <div class="faq-item">
+        <h4>6. Why does the model show attrition even when I have just started hiring?</h4>
+        <p>Attrition is calculated based on the total headcount, including existing and new hires. Since attrition represents the expected percentage of engineers leaving over time, it affects the team throughout the year, even if hiring has just begun.</p>
+    </div>
+
+    <div class="faq-item">
+        <h4>7. How is the hiring rate calculated?</h4>
+        <p>The hiring rate is computed using a simulation that adjusts the rate until the funded team size is reached by the specified week. It considers hiring time, ramp-up time, attrition, and caps the total headcount at the funded size.</p>
+    </div>
+
+    <div class="faq-item">
+        <h4>8. Can I manually adjust the headcount in the monthly summary?</h4>
+        <p>Yes, you can edit the "Headcount Available" column in the monthly summary table. The tool will update the calculations and charts to reflect your changes, assuming all engineers are fully ramped up for simplicity.</p>
+    </div>
+
+    <div class="faq-item">
+        <h4>9. What does the "Effective Engineers" line represent on the chart?</h4>
+        <p>The "Effective Engineers" line shows the number of engineers adjusted for efficiency, leave days, public holidays, and ramp-up time. It reflects the actual productive capacity of your engineering team over time.</p>
+    </div>
+
+    <div class="faq-item">
+        <h4>10. Why is the funded team size represented as a dashed line?</h4>
+        <p>The funded team size is shown as a dashed red line to indicate the maximum number of engineers your budget allows. It serves as a reference point on the chart to compare your actual headcount against the funded size.</p>
+    </div>
+
+    <div class="faq-item">
+        <h4>11. How does ramp-up time affect the model?</h4>
+        <p>Ramp-up time is the period new hires take to reach full productivity. During this time, their contribution to the effective engineering capacity is not at 100%. The model accounts for this by delaying the addition of new hires to the fully ramped-up engineer count.</p>
+    </div>
+
+    <div class="faq-item">
+        <h4>12. Why is the "Cumulative Attrition" line important?</h4>
+        <p>The "Cumulative Attrition" line shows the total number of engineers expected to leave over time due to attrition. It's important for planning replacement hires and understanding how attrition affects your team's capacity.</p>
+    </div>
+
+    <div class="faq-item">
+        <h4>13. Can I adjust the attrition rate during the year?</h4>
+        <p>The tool currently uses a constant annual attrition rate distributed evenly throughout the year. To model changes in attrition rate over time, you would need to adjust the input and regenerate the forecast.</p>
+    </div>
+
+ <h2>Suggestions for Improvement</h2>
+
+<p style="text-align: justify;">To enhance the model's accuracy and applicability, future versions could consider:</p>
+
+<h3 style="text-align: justify;">1. Incorporating Seasonal Variations</h3>
+
+<ul>
+  <li style="text-align: justify;"><strong>Variable Leave and Holiday Distribution:</strong> Model leave and public holidays based on historical patterns to reflect periods of low and high availability.</li>
+  <li style="text-align: justify;"><strong>Attrition Peaks:</strong> Adjust attrition rates to account for known periods of higher turnover.</li>
+</ul>
+
+<h3 style="text-align: justify;">2. Enhanced Ramp-Up Modeling</h3>
+
+<ul>
+  <li style="text-align: justify;"><strong>Gradual Productivity Increase:</strong> Implement a ramp-up curve where productivity increases incrementally over the ramp-up period.</li>
+  <li style="text-align: justify;"><strong>Individualized Ramp-Up:</strong> Allow different ramp-up times for different roles or experience levels.</li>
+</ul>
+
+<h3 style="text-align: justify;">3. Realistic Hiring Constraints</h3>
+
+<ul>
+  <li style="text-align: justify;"><strong>Recruitment Capacity Limits:</strong> Introduce maximum hiring rates based on recruitment team capacity.</li>
+  <li style="text-align: justify;"><strong>Candidate Pipeline Dynamics:</strong> Factor in time-to-fill variations, candidate drop-off rates, and competition in the job market.</li>
+</ul>
+
+<h3 style="text-align: justify;">4. Dynamic Efficiency Factor</h3>
+
+<ul>
+  <li style="text-align: justify;"><strong>Efficiency Over Time:</strong> Allow the efficiency factor to change over time, reflecting process improvements or team fatigue.</li>
+  <li style="text-align: justify;"><strong>Role-Based Efficiency:</strong> Differentiate efficiency factors for various roles or seniority levels.</li>
+</ul>
+
+<h3 style="text-align: justify;">5. Integration with Project Planning</h3>
+
+<ul>
+  <li style="text-align: justify;"><strong>Task-Level Planning:</strong> Link resource capacity to project tasks and milestones to assess whether capacity meets project demands.</li>
+  <li style="text-align: justify;"><strong>Risk Modeling:</strong> Incorporate risks and uncertainties that could impact timelines and capacity.</li>
+</ul>
+
+<h3 style="text-align: justify;">6. Economic Scenario Planning</h3>
+
+<ul>
+  <li style="text-align: justify;"><strong>Budget Flexibility:</strong> Allow for adjustments in the funded team size based on potential budget changes.</li>
+  <li style="text-align: justify;"><strong>External Shocks:</strong> Introduce scenarios for external events that could affect hiring, attrition, or productivity.</li>
+</ul>
+
+<h3 style="text-align: justify;">7. User Input Flexibility</h3>
+
+<ul>
+  <li style="text-align: justify;"><strong>Custom Time Frames:</strong> Enable users to adjust the time frame of the forecast beyond a single year.</li>
+  <li style="text-align: justify;"><strong>Data Import:</strong> Allow users to import historical data to better tailor the model to their organization's patterns.</li>
+</ul>
+
+ 
+<h3 style="text-align: justify;">8. Flaws in the model according to Claude sonet 3.5</h3>
+<ul>
+	<li style="text-align: justify;"><strong>Linear Attrition Model</strong>:Flaw: The model assumes a constant attrition rate throughout the year. Improvement: Implement a more dynamic attrition model that accounts for seasonal variations or specific events (e.g., higher attrition after bonus payouts or during economic shifts).</li>
+	<li style="text-align: justify;"><strong>Simplified Ramp-Up</strong>:Flaw: The model treats ramp-up as a binary state (not ramped up vs. fully ramped up).Improvement: Implement a gradual ramp-up curve where productivity increases incrementally over time.</li>
+	<li style="text-align: justify;"><strong>Constant Hiring Rate</strong>: Flaw: The model assumes a constant hiring rate to reach the target. Improvement: Allow for variable hiring rates or incorporate hiring freezes/spikes based on business cycles or budget constraints.</li>
+	<li style="text-align: justify;"><strong>Limited Efficiency Factor</strong>:Flaw: Uses a single efficiency factor for all engineers. Improvement: Implement role-based or seniority-based efficiency factors, and allow for efficiency improvements over time.</li>
+	<li style="text-align: justify;"><strong>Lack of Project-Specific Planning</strong>:Flaw: The model focuses on general capacity without considering specific project needs.Improvement: Integrate project planning features to match capacity with anticipated project demands.</li>
+	<li style="text-align: justify;"><strong>Simplified Leave and Holiday Model</strong>:Flaw: Assumes even distribution of leave and holidays throughout the year. Improvement: Allow for more realistic modeling of leave patterns and country-specific holidays.</li>
+	<li style="text-align: justify;"><strong>Limited Risk Modeling</strong>: Flaw: Doesn't account for uncertainties in hiring, attrition, or productivity. Improvement: Implement Monte Carlo simulations or other risk modeling techniques to show a range of possible outcomes.</li>
+	<li style="text-align: justify;"><strong>Fixed Time Horizon:Flaw</strong>: The model is limited to a one-year forecast. Improvement: Allow users to adjust the time horizon for longer-term planning.</li>
+	<li style="text-align: justify;"><strong>Lack of Cost Considerations</strong>: Flaw: The model focuses on headcount without considering associated costs. Improvement: Incorporate cost modeling to show budget implications of different growth scenarios.</li>
+	<li style="text-align: justify;"><strong>Limited Handling of Over-Hiring</strong>: Flaw: The model caps hiring at the funded size but doesn't address potential over-hiring scenarios. Improvement: Add logic to handle scenarios where actual headcount exceeds funded size, including potential downsizing strategies.</li>
+	<li style="text-align: justify;"><strong>Simplified Hiring Pipeline</strong>: Flaw: Assumes all hires take the same amount of time and always succeed. Improvement: Model a more realistic hiring funnel with drop-offs and variable time-to-hire based on role or market conditions.</li>
+	<li style="text-align: justify;"><strong>Lack of Historical Data Integration</strong>:Flaw: The model doesn't leverage historical data for predictions. Improvement: Allow users to import historical data to calibrate the model to their organization's patterns.</li>
+	<li style="text-align: justify;"><strong>Limited Visualization Options</strong>:Flaw: Only provides a single chart type. Improvement: Offer multiple visualization options (e.g., stacked area charts, Sankey diagrams) for different insights.
+	<li style="text-align: justify;"><strong>No Scenario Comparison</strong>: Flaw: Users can only view one scenario at a time. Improvement: Allow users to save and compare multiple scenarios side-by-side.</li>
+	<li style="text-align: justify;"><strong>Lack of External Factors Consideration</strong>: Flaw: The model doesn't account for external market factors. Improvement: Incorporate adjustable parameters for market conditions that could affect hiring ease or attrition rates.</li>
+<ul>
+  
+   
+  </div>
+  
+<script>
+    // Global variables to store simulation data for updates
+    let totalRampedUpEngineersArray = []; // Renamed variable
+    let productiveEngineers = [];
+    let cumulativeAttritionArray = [];
+    let monthlyData = {};
+    let totalHeadcountArray = [];
+
+    const weekToMonth = [
+        1,1,1,1, // January (4 weeks)
+        2,2,2,2, // February (4 weeks)
+        3,3,3,3,3, // March (5 weeks)
+        4,4,4,4, // April (4 weeks)
+        5,5,5,5, // May (4 weeks)
+        6,6,6,6,6, // June (5 weeks)
+        7,7,7,7, // July (4 weeks)
+        8,8,8,8, // August (4 weeks)
+        9,9,9,9,9, // September (5 weeks)
+        10,10,10,10, // October (4 weeks)
+        11,11,11,11, // November (4 weeks)
+        12,12,12,12, // December (4 weeks)
+    ];
+
+    let forecastChart;
+
+    function generateForecast() {
+        // Retrieve input values
+        const fundedSize = parseInt(document.getElementById('fundedSize').value);
+        const currentEngineers = parseInt(document.getElementById('currentEngineers').value);
+        const hiringTime = parseInt(document.getElementById('hiringTime').value);
+        const rampUpTime = parseInt(document.getElementById('rampUpTime').value);
+        const attritionRate = parseFloat(document.getElementById('attritionRate').value) / 100;
+        const efficiencyFactor = parseFloat(document.getElementById('efficiencyFactor').value) / 100;
+        const leaveDays = parseInt(document.getElementById('leaveDays').value);
+        const publicHolidays = parseInt(document.getElementById('publicHolidays').value);
+        const closeGapWeek = parseInt(document.getElementById('closeGapWeek').value);
+
+        // Feasibility Check
+        if (closeGapWeek < hiringTime) {
+            document.getElementById('hiringInfo').innerHTML = `<span style="color:red">It's impossible to reach the funded team size by week ${closeGapWeek} with an average hiring time of ${hiringTime} weeks.</span>`;
+            document.getElementById('outputSummary').innerHTML = `<p>You may consider adjusting the following parameters to achieve your target:</p>
+            <ul>
+                <li><strong>Reduce Average Hiring Time:</strong> Shorten the hiring process duration.</li>
+                <li><strong>Extend Week to Close Funding Gap:</strong> Set a later target week.</li>
+                <li><strong>Increase Current Available Engineers:</strong> Include engineers already in the hiring pipeline.</li>
+                <li><strong>Reduce Attrition Rate:</strong> Implement strategies to retain engineers.</li>
+            </ul>`;
+            // Clear previous outputs
+            document.getElementById('forecastTable').innerHTML = '';
+            document.getElementById('monthlySummaryTable').innerHTML = '';
+            if (forecastChart) {
+                forecastChart.destroy();
+            }
+            return;
+        } else {
+            document.getElementById('outputSummary').innerHTML = ''; // Clear previous summary
+        }
+
+        // Calculate required hiring rate
+        const hiringRate = computeHiringRate(fundedSize, currentEngineers, hiringTime, rampUpTime, attritionRate, closeGapWeek);
+
+        document.getElementById('hiringInfo').innerHTML = `Required Hiring Rate: <span style="color:blue">${hiringRate.toFixed(2)} engineers/week</span> to reach funded team size by week ${closeGapWeek}.`;
+
+        // Initialize arrays for weeks and engineers
+        let weeks = [...Array(52).keys()].map(i => i + 1);
+
+        // Simulate team size over time
+        const simulationResult = simulateTeamSize(hiringRate, fundedSize, currentEngineers, hiringTime, rampUpTime, attritionRate, efficiencyFactor, leaveDays, publicHolidays);
+
+        // Update global variables
+        productiveEngineers = simulationResult.productiveEngineers;
+        totalRampedUpEngineersArray = simulationResult.totalRampedUpEngineersArray; // Updated variable
+        cumulativeAttritionArray = simulationResult.cumulativeAttritionArray;
+        monthlyData = simulationResult.monthlyData;
+        totalHeadcountArray = simulationResult.totalHeadcountArray;
+
+        // Generate tables and charts
+        generateWeeklyTable(weeks, productiveEngineers);
+        generateMonthlySummary(monthlyData);
+        generateChart(weeks, simulationResult, fundedSize);
+
+        // Generate output summary
+        generateOutputSummary(hiringRate, closeGapWeek);
+    }
+
+    function computeHiringRate(fundedSize, currentEngineers, hiringTime, rampUpTime, attritionRate, closeGapWeek) {
+        let lowerBound = 0;
+        let upperBound = 20; // Adjusted maximum plausible hiring rate
+        let tolerance = 0.01;
+        let hiringRate = 0;
+        let iterations = 0;
+
+        while ((upperBound - lowerBound) > tolerance && iterations < 1000) {
+            hiringRate = (upperBound + lowerBound) / 2;
+            const simulationResult = simulateTeamSize(
+                hiringRate, fundedSize, currentEngineers, hiringTime, rampUpTime, attritionRate,
+                1, 0, 0, false, true
+            );
+            const totalHeadcountAtTargetWeek = simulationResult.totalHeadcountArray[closeGapWeek - 1];
+
+            if (totalHeadcountAtTargetWeek >= fundedSize) {
+                upperBound = hiringRate;
+            } else {
+                lowerBound = hiringRate;
+            }
+            iterations++;
+        }
+
+        return hiringRate;
+    }
+
+    function simulateTeamSize(
+        hiringRate, fundedSize, currentEngineers, hiringTime, rampUpTime, attritionRate,
+        efficiencyFactor, leaveDays, publicHolidays, capAtFundedSize = true,
+        hiringForTotalHeadcount = false
+    ) {
+        let productiveEngineersLocal = [];
+        let totalRampedUpEngineersArrayLocal = []; // Updated variable
+        let cumulativeAttritionArrayLocal = [];
+        let totalHeadcountArrayLocal = [];
+        let monthlyDataLocal = {
+            headcount: [],
+            sdeWeeks: [],
+            sdeDays: []
+        };
+
+        let weeks = 52;
+        let totalRampedUpEngineers = currentEngineers; // Fully ramped-up engineers
+        let totalHeadcount = currentEngineers; // Includes ramping engineers
+        let hiringPipeline = [];
+        let rampingEngineers = [];
+        let cumulativeAttrition = 0;
+        let attritionCounter = 0;
+
+        // Weekly attrition rate
+        const weeklyAttritionRate = attritionRate / 52;
+        const weeklyLeaveDaysPerEngineer = leaveDays / 52;
+        const weeklyPublicHolidaysPerEngineer = publicHolidays / 52;
+        const weeklyAvailableDaysPerEngineer = 5 - weeklyLeaveDaysPerEngineer - weeklyPublicHolidaysPerEngineer;
+
+        for (let week = 1; week <= weeks; week++) {
+            // Attrition
+            attritionCounter += totalHeadcount * weeklyAttritionRate;
+            let attritionThisWeek = Math.floor(attritionCounter);
+            attritionCounter -= attritionThisWeek;
+
+            totalHeadcount -= attritionThisWeek;
+
+            // Remove attrition from fully ramped-up engineers first
+            let attritionFromRamped = Math.min(attritionThisWeek, totalRampedUpEngineers);
+            totalRampedUpEngineers -= attritionFromRamped;
+
+            // If any attrition remains, remove from ramping engineers
+            let remainingAttrition = attritionThisWeek - attritionFromRamped;
+            if (remainingAttrition > 0) {
+                // Remove ramping engineers from the end of the rampingEngineers array
+                for (let i = 0; i < remainingAttrition && rampingEngineers.length > 0; i++) {
+                    rampingEngineers.pop();
+                }
+            }
+
+            cumulativeAttrition += attritionThisWeek;
+
+            // Ensure totals don't go negative
+            totalRampedUpEngineers = Math.max(0, totalRampedUpEngineers);
+            totalHeadcount = Math.max(0, totalHeadcount);
+
+            // Hiring
+            let totalFutureHeadcount = totalHeadcount + hiringPipeline.reduce((sum, h) => sum + h.count, 0) + rampingEngineers.reduce((sum, r) => sum + r.count, 0);
+            if (totalFutureHeadcount < fundedSize) {
+                let hiringNeeded = fundedSize - totalFutureHeadcount;
+                let actualHiring = Math.min(hiringRate, hiringNeeded);
+                if (actualHiring > 0) {
+                    hiringPipeline.push({ weeksLeft: hiringTime, count: actualHiring });
+                }
+            }
+
+            // Advance hiring pipeline
+            for (let i = hiringPipeline.length - 1; i >= 0; i--) {
+                hiringPipeline[i].weeksLeft--;
+                if (hiringPipeline[i].weeksLeft <= 0) {
+                    rampingEngineers.push({ weeksLeft: rampUpTime, count: hiringPipeline[i].count });
+                    totalHeadcount += hiringPipeline[i].count; // Add to total headcount
+                    hiringPipeline.splice(i, 1);
+                }
+            }
+
+            // Advance ramp-up pipeline
+            for (let i = rampingEngineers.length - 1; i >= 0; i--) {
+                rampingEngineers[i].weeksLeft--;
+                if (rampingEngineers[i].weeksLeft <= 0) {
+                    totalRampedUpEngineers += rampingEngineers[i].count;
+                    rampingEngineers.splice(i, 1);
+                }
+            }
+
+            if (capAtFundedSize) {
+                // Ensure total headcount doesn't exceed funded size
+                totalHeadcount = Math.min(totalHeadcount, fundedSize);
+            }
+
+            // Effective engineers considering efficiency and leave days
+            const effectiveEngineers = totalRampedUpEngineers * efficiencyFactor * (weeklyAvailableDaysPerEngineer / 5);
+            productiveEngineersLocal.push(effectiveEngineers);
+            totalRampedUpEngineersArrayLocal.push(totalRampedUpEngineers); // Updated variable
+            totalHeadcountArrayLocal.push(totalHeadcount);
+            cumulativeAttritionArrayLocal.push(cumulativeAttrition);
+
+            // Map week to month
+            let monthIndex = weekToMonth[week - 1] - 1;
+            if (!monthlyDataLocal.headcount[monthIndex]) {
+                monthlyDataLocal.headcount[monthIndex] = totalHeadcount;
+                monthlyDataLocal.sdeWeeks[monthIndex] = effectiveEngineers;
+                monthlyDataLocal.sdeDays[monthIndex] = effectiveEngineers * weeklyAvailableDaysPerEngineer;
+            } else {
+                monthlyDataLocal.headcount[monthIndex] = totalHeadcount;
+                monthlyDataLocal.sdeWeeks[monthIndex] += effectiveEngineers;
+                monthlyDataLocal.sdeDays[monthIndex] += effectiveEngineers * weeklyAvailableDaysPerEngineer;
+            }
+        }
+
+        // Adjust monthly SDEs
+        for (let i = 0; i < 12; i++) {
+            monthlyDataLocal.sdeDays[i] = parseFloat((monthlyDataLocal.sdeDays[i] || 0).toFixed(2));
+            monthlyDataLocal.sdeWeeks[i] = parseFloat((monthlyDataLocal.sdeWeeks[i] || 0).toFixed(2));
+        }
+
+        return {
+            productiveEngineers: productiveEngineersLocal,
+            totalRampedUpEngineersArray: totalRampedUpEngineersArrayLocal, // Updated variable
+            totalHeadcountArray: totalHeadcountArrayLocal,
+            cumulativeAttritionArray: cumulativeAttritionArrayLocal,
+            monthlyData: monthlyDataLocal
+        };
+    }
+
+    function generateWeeklyTable(weeks, productiveEngineers) {
+        let tableHTML = '<tr><th>Week</th><th>Effective Engineers</th></tr>';
+        for (let i = 0; i < weeks.length; i++) {
+            tableHTML += `<tr><td>${weeks[i]}</td><td>${productiveEngineers[i].toFixed(2)}</td></tr>`;
+        }
+        document.getElementById('forecastTable').innerHTML = tableHTML;
+    }
+
+    function generateMonthlySummary(monthlyData) {
+        let monthlyTableHTML = '<tr><th>Month</th><th>Headcount Available</th><th>SDE-Weeks</th><th>SDE-Days</th></tr>';
+        for (let i = 0; i < 12; i++) {
+            monthlyTableHTML += `<tr>
+                <td>${i + 1}</td>
+                <td contenteditable="true" class="editable">${Math.round(monthlyData.headcount[i] || 0)}</td>
+                <td>${(monthlyData.sdeWeeks[i] || 0).toFixed(2)}</td>
+                <td>${(monthlyData.sdeDays[i] || 0).toFixed(2)}</td>
+            </tr>`;
+        }
+        document.getElementById('monthlySummaryTable').innerHTML = monthlyTableHTML;
+
+        // Add event listeners to editable cells
+        const editableCells = document.querySelectorAll('#monthlySummaryTable td.editable');
+        editableCells.forEach((cell, index) => {
+            cell.addEventListener('input', function() {
+                const newValue = parseInt(this.textContent);
+                if (!isNaN(newValue)) {
+                    updateMonthlyHeadcount(index, newValue);
+                }
+            });
+        });
+    }
+
+    function generateOutputSummary(hiringRate, closeGapWeek) {
+        const summary = `
+            <p>To reach the funded team size by week ${closeGapWeek}, you need to hire at a rate of ${hiringRate.toFixed(2)} engineers per week.</p>
+            <p>This accounts for a hiring time of ${document.getElementById('hiringTime').value} weeks and a ramp-up time of ${document.getElementById('rampUpTime').value} weeks.</p>
+            <p>Attrition is considered at an annual rate of ${document.getElementById('attritionRate').value}%, which affects the total headcount over time.</p>
+            <p>The effective number of engineers accounts for efficiency factors and non-productive time due to leave and public holidays.</p>
+        `;
+        document.getElementById('outputSummary').innerHTML = summary;
+    }
+
+    function updateMonthlyHeadcount(monthIndex, newHeadcount) {
+        // Update totalHeadcountArray and recalculate totalRampedUpEngineersArray and productiveEngineers
+        const fundedSize = parseInt(document.getElementById('fundedSize').value);
+        const efficiencyFactor = parseFloat(document.getElementById('efficiencyFactor').value) / 100;
+        const leaveDays = parseInt(document.getElementById('leaveDays').value);
+        const publicHolidays = parseInt(document.getElementById('publicHolidays').value);
+
+        const weeklyLeaveDaysPerEngineer = leaveDays / 52;
+        const weeklyPublicHolidaysPerEngineer = publicHolidays / 52;
+        const weeklyAvailableDaysPerEngineer = 5 - weeklyLeaveDaysPerEngineer - weeklyPublicHolidaysPerEngineer;
+
+        let weekStart = weekToMonth.indexOf(monthIndex + 1);
+        let weekEnd = weekToMonth.lastIndexOf(monthIndex + 1);
+
+        for (let week = weekStart; week <= weekEnd; week++) {
+            totalHeadcountArray[week] = newHeadcount;
+            totalRampedUpEngineersArray[week] = newHeadcount; // Assume all are fully ramped up
+            const effectiveEngineers = totalRampedUpEngineersArray[week] * efficiencyFactor * (weeklyAvailableDaysPerEngineer / 5);
+            productiveEngineers[week] = effectiveEngineers;
+        }
+
+        // Recalculate monthlyData
+        monthlyData.headcount[monthIndex] = newHeadcount;
+        monthlyData.sdeWeeks[monthIndex] = 0;
+        monthlyData.sdeDays[monthIndex] = 0;
+
+        for (let week = weekStart; week <= weekEnd; week++) {
+            monthlyData.sdeWeeks[monthIndex] += productiveEngineers[week];
+            monthlyData.sdeDays[monthIndex] += productiveEngineers[week] * weeklyAvailableDaysPerEngineer;
+        }
+
+        // Update charts and tables
+        generateWeeklyTable([...Array(52).keys()].map(i => i + 1), productiveEngineers);
+        generateMonthlySummary(monthlyData);
+        generateChart([...Array(52).keys()].map(i => i + 1), {
+            productiveEngineers,
+            totalRampedUpEngineersArray,
+            totalHeadcountArray,
+            cumulativeAttritionArray
+        }, fundedSize);
+    }
+
+    function generateChart(weeks, simulationResult, fundedSize) {
+        // Remove existing canvas if it exists
+        if (forecastChart) {
+            forecastChart.destroy();
+        }
+
+        const ctx = document.getElementById('forecastChart').getContext('2d');
+        forecastChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: weeks,
+                datasets: [
+                    {
+                        label: 'Effective Engineers',
+                        data: simulationResult.productiveEngineers,
+                        borderColor: 'blue',
+                        fill: false,
+                        yAxisID: 'y',
+                    },
+                    {
+                        label: 'Total Ramped Up Engineers',
+                        data: simulationResult.totalRampedUpEngineersArray, // Updated label
+                        borderColor: 'green',
+                        fill: false,
+                        yAxisID: 'y',
+                    },
+                    {
+                        label: 'Total Headcount',
+                        data: simulationResult.totalHeadcountArray,
+                        borderColor: 'purple',
+                        fill: false,
+                        yAxisID: 'y',
+                    },
+                    {
+                        label: 'Cumulative Attrition',
+                        data: simulationResult.cumulativeAttritionArray,
+                        borderColor: 'orange',
+                        fill: false,
+                        yAxisID: 'y1',
+                    },
+                    {
+                        label: 'Funded Team Size',
+                        data: weeks.map(() => fundedSize),
+                        borderColor: 'red',
+                        borderDash: [5, 5],
+                        fill: false,
+                        yAxisID: 'y',
+                    },
+                ]
+            },
+            options: {
+                responsive: true,
+                interaction: {
+                    mode: 'index',
+                    intersect: false,
+                },
+                stacked: false,
+                scales: {
+                    x: { display: true, title: { display: true, text: 'Week' } },
+                    y: {
+                        type: 'linear',
+                        display: true,
+                        position: 'left',
+                        beginAtZero: true,
+                        title: { display: true, text: 'Engineers' },
+                    },
+                    y1: {
+                        type: 'linear',
+                        display: true,
+                        position: 'right',
+                        grid: {
+                            drawOnChartArea: false,
+                        },
+                        beginAtZero: true,
+                        title: { display: true, text: 'Cumulative Attrition' },
+                    },
+                }
+            }
+        });
+    }
+
+    // Load Chart.js library
+    (function() {
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/chart.js';
+        script.onload = function() {
+            generateForecast();
+        };
+        document.head.appendChild(script);
+    })();
+</script>
+
+</body>
+</html>
